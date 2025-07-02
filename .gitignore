@@ -1,0 +1,42 @@
+# Ignore Python cache and virtualenvs
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env/
+venv/
+ENV/
+
+# Ignore node modules
+node_modules/
+
+# Ignore AWS CloudFormation change sets and temp files
+*.change-set.json
+*.template
+*.bak
+*.tmp
+
+# Ignore logs
+*.log
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
+
+# Ignore VSCode settings
+.vscode/
+
+# Ignore shell history
+*.swp
+*.swo
+
+# Ignore output and build artifacts
+dist/
+build/
+
+# Ignore credentials and sensitive files
+.env
+.aws/
+
+# Ignore any local overrides
+local.*

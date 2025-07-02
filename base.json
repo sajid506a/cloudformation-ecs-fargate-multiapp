@@ -1,0 +1,129 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Parent stack for ECS Fargate, ECR, CloudWatch, IAM, VPC, and networking.",
+  "Parameters": {
+    "VpcCidr": { "Type": "String", "Default": "10.0.0.0/16" },
+    "Subnet1Cidr": { "Type": "String", "Default": "10.0.1.0/24" },
+    "Subnet2Cidr": { "Type": "String", "Default": "10.0.2.0/24" },
+    "EcrRepoName": { "Type": "String", "Default": "my-ecr-repo" }
+  },
+  "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": { "Ref": "VpcCidr" },
+        "EnableDnsSupport": true,
+        "EnableDnsHostnames": true,
+        "Tags": [{ "Key": "Name", "Value": "ECSFargateVPC" }]
+      }
+    },
+    "Subnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "CidrBlock": { "Ref": "Subnet1Cidr" },
+        "AvailabilityZone": { "Fn::Select": [0, { "Fn::GetAZs": "" }] },
+        "MapPublicIpOnLaunch": true
+      }
+    },
+    "Subnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "CidrBlock": { "Ref": "Subnet2Cidr" },
+        "AvailabilityZone": { "Fn::Select": [1, { "Fn::GetAZs": "" }] },
+        "MapPublicIpOnLaunch": true
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway"
+    },
+    "AttachGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "InternetGatewayId": { "Ref": "InternetGateway" }
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": { "VpcId": { "Ref": "VPC" } }
+    },
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "RouteTableId": { "Ref": "PublicRouteTable" },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": { "Ref": "InternetGateway" }
+      }
+    },
+    "Subnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": { "Ref": "Subnet1" },
+        "RouteTableId": { "Ref": "PublicRouteTable" }
+      }
+    },
+    "Subnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": { "Ref": "Subnet2" },
+        "RouteTableId": { "Ref": "PublicRouteTable" }
+      }
+    },
+    "ECSCluster": {
+      "Type": "AWS::ECS::Cluster"
+    },
+    "ECRRepo": {
+      "Type": "AWS::ECR::Repository",
+      "Properties": { "RepositoryName": { "Ref": "EcrRepoName" } }
+    },
+    "LogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/ecs/ecs-fargate-multiapp",
+        "RetentionInDays": 7
+      }
+    },
+    "ECSTaskExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [{
+            "Effect": "Allow",
+            "Principal": { "Service": [ "ecs-tasks.amazonaws.com" ] },
+            "Action": [ "sts:AssumeRole" ]
+          }]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+        ]
+      }
+    },
+    "ECSSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "GroupDescription": "Allow HTTP",
+        "SecurityGroupIngress": [{
+          "IpProtocol": "tcp",
+          "FromPort": 80,
+          "ToPort": 80,
+          "CidrIp": "0.0.0.0/0"
+        }]
+      }
+    }
+  },
+  "Outputs": {
+    "VPC": { "Value": { "Ref": "VPC" }, "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-VPC" } } },
+    "Subnet1": { "Value": { "Ref": "Subnet1" }, "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-Subnet1" } } },
+    "Subnet2": { "Value": { "Ref": "Subnet2" }, "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-Subnet2" } } },
+    "ECSCluster": { "Value": { "Ref": "ECSCluster" }, "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-ECSCluster" } } },
+    "ECRRepo": { "Value": { "Ref": "ECRRepo" }, "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-ECRRepo" } } },
+    "LogGroup": { "Value": { "Ref": "LogGroup" }, "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-LogGroup" } } },
+    "ECSTaskExecutionRole": { "Value": { "Ref": "ECSTaskExecutionRole" }, "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-ECSTaskExecutionRole" } } },
+    "ECSSecurityGroup": { "Value": { "Ref": "ECSSecurityGroup" }, "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-ECSSecurityGroup" } } }
+  }
+}

@@ -81,11 +81,11 @@ TASKROLE=$(gen_output ECSTaskExecutionRole)
 SG=$(gen_output ECSSecurityGroup)
 
 # 3. Define app configs as arrays for easier management
-APPS=(app1 app2 app6)
-# APPS=(app1 app2 app3 app4 app5 app6)
-IMAGES=(nginx:latest httpd:latest)
-ENVS=(value1 value2 value6)
-TEMPLATES=(app1.json app2.json app6.json)
+APPS=(app1 app2)
+# APPS=(app1 app2 app3 app4 app5)Add commentMore actions
+IMAGES=(nginx:latest httpd:latest redis:latest node:latest amazonlinux:latest)
+ENVS=(value1 value2 value3 value4 value5)
+TEMPLATES=(app1.json app2.json app3.json app4.json app5.json)
 
 # 4. Deploy each child stack (create or update)
 for idx in ${!APPS[@]}; do

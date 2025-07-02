@@ -1,0 +1,75 @@
+name: CI/CD ECS Fargate Multi-App
+
+description: |
+  Build, version, and deploy multiple Dockerized apps to AWS ECS Fargate using CloudFormation in a CI/CD pipeline.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPO: <your-ecr-repo-uri>
+
+jobs:
+  build:
+    name: Build and Push Docker Images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        run: aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO
+
+      - name: Build, tag, and push app1
+        run: |
+          docker build -t $ECR_REPO:app1-${{ github.sha }} -f app1/Dockerfile .
+          docker push $ECR_REPO:app1-${{ github.sha }}
+      # Repeat for app2, app3, etc.
+
+  deploy:
+    name: Deploy CloudFormation Stacks
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy/Update CloudFormation stacks
+        run: |
+          aws cloudformation deploy \
+            --stack-name ecs-app1 \
+            --template-file app1.json \
+            --parameter-overrides \
+              AppImage=$ECR_REPO:app1-${{ github.sha }} \
+              # ...other parameters... \
+            --capabilities CAPABILITY_NAMED_IAM
+          aws cloudformation deploy \
+            --stack-name ecs-app2 \
+            --template-file app2.json \
+            --parameter-overrides \
+              AppImage=$ECR_REPO:app2-${{ github.sha }} \
+              # ...other parameters... \
+            --capabilities CAPABILITY_NAMED_IAM
+          # ...repeat for app3, app4, app5 if needed...
+          aws cloudformation deploy \
+            --stack-name ecs-app6 \
+            --template-file app6.json \
+            --parameter-overrides \
+              AppImage=${{ secrets.APP6_IMAGE_URI }} \
+              # ...other parameters... \
+            --capabilities CAPABILITY_NAMED_IAM

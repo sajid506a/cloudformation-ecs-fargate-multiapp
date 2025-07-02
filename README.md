@@ -1,79 +1,53 @@
-# CloudFormation ECS Fargate Multi-App Deployment
+# CloudFormation ECS Fargate Multi-App Deployment (CI/CD)
 
-This project provisions an AWS ECS Fargate environment and deploys five sample applications as separate CloudFormation child stacks. It is designed for easy extension and automation.
+This project provisions an AWS ECS Fargate environment and deploys up to five sample applications as separate CloudFormation child stacks. It is designed for robust, idempotent, and automated multi-app deployment using a CI/CD pipeline.
 
 ## Project Structure
 
 - `base.json` - Parent stack template. Provisions VPC, subnets, ECS cluster, ECR repo, CloudWatch log group, IAM roles, and security group.
-- `app1.json` to `app5.json` - Child stack templates. Each defines an ECS Fargate service and task definition for a specific app (nginx, httpd, redis, node, amazonlinux).
-- `deploy.sh` - Bash script to deploy the parent stack and all child stacks. Handles stack creation/update, parameter passing, and waits for completion.
+- `app1.json` to `app5.json` - Child stack templates. Each defines an ECS Fargate service and task definition for a specific app (nginx, httpd, redis, node, amazonlinux). Each child stack always creates a unique CloudWatch log group for ECS logging.
+- `.github/workflows/deploy.yml` - GitHub Actions workflow for CI/CD: builds, versions, and deploys Docker images and CloudFormation stacks.
+- `.gitignore` - Standard ignore patterns for AWS, OS, and development artifacts.
 
 ## Prerequisites
 
-- AWS CLI installed and configured.
-- Bash shell (Linux, macOS, or Windows with WSL/Git Bash).
-- (Optional) `jq` for improved JSON parsing.
+- AWS CLI and Docker installed on CI/CD runners (for local testing, install both on your machine).
+- AWS ECR repository created for storing Docker images for each app (e.g., one repo per app, or a single repo with different tags).
+- GitHub repository secrets set: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and (optionally) `AWS_REGION` and your ECR repo URI as a secret or workflow variable.
 
-## Usage
+## Usage (CI/CD)
 
-Run the deployment script with the required AWS region. The AWS CLI profile is optional (defaults to `default`).
+On every push to `main`, the workflow will:
+1. Build and tag Docker images for each app (e.g., `app1:<sha>`).
+2. Push images to ECR.
+3. Deploy or update CloudFormation stacks, passing the new image tag as a parameter.
 
-```
-bash deploy.sh --region <aws-region> [--profile <aws-profile>]
-```
-
-- `--region`   : AWS region to deploy resources (required)
-- `--profile`  : AWS CLI profile to use (optional, default: `default`)
-- `-h, --help` : Show help message
-
-### Example
-
-```
-bash deploy.sh --region us-east-1 --profile my-aws-profile
-bash deploy.sh --region us-east-1
-# or
-bash deploy.sh --profile default --region us-east-1
-```
+You can also trigger the workflow manually from the GitHub Actions tab.
 
 ## How It Works
 
-1. **Parent Stack** (`base.json`):
-   - Provisions networking (VPC, subnets, route tables, IGW), ECS cluster, ECR repo, CloudWatch log group, IAM role, and security group.
-   - Outputs all resource IDs for use by child stacks.
-2. **Child Stacks** (`app1.json` ... `app5.json`):
-   - Each defines an ECS Fargate service and task definition for a specific app image.
-   - Parameters are passed from the parent stack outputs and script arrays.
-3. **Script** (`deploy.sh`):
-   - Deploys or updates the parent stack.
-   - Waits for completion, then fetches outputs.
-   - Iterates over each app, deploying or updating the child stack with the correct parameters.
-   - Waits for each child stack to complete.
+1. **Docker Build & Push**:
+   - Each app's Docker image is built and tagged with the commit SHA.
+   - Images are pushed to ECR.
+2. **CloudFormation Deploy**:
+   - Each child stack is updated with the new image tag using the `AppImage` parameter.
+   - Uses `aws cloudformation deploy` for idempotent updates.
 
 ## Customization
 
-- To add/remove apps, edit the `APPS`, `IMAGES`, `ENVS`, and `TEMPLATES` arrays in `deploy.sh`.
+- To add/remove apps, update the workflow and CloudFormation templates accordingly.
 - Modify the CloudFormation templates as needed for your application requirements.
 
 ## Notes
 
-- The script is idempotent: it will update stacks if they already exist.
-- If a stack deployment fails, the script will exit with an error.
-- All AWS CLI commands use the specified profile and region.
+- Each app stack always creates a new CloudWatch log group for ECS logging, ensuring no name conflicts.
+- All AWS CLI commands use the specified profile and region from the workflow environment.
+- The workflow is idempotent: it will update stacks if they already exist.
+
+## Deleting All Stacks
+
+To delete all child and parent stacks, you can use the AWS CLI or create a similar workflow/script for teardown.
 
 ## License
 
 MIT License
-
-### Deleting All Stacks
-
-To delete all child and parent stacks created by this project, use the provided script:
-
-```
-bash delete.sh --region <aws-region> [--profile <aws-profile>]
-```
-
-- `--region`   : AWS region where stacks were deployed (required)
-- `--profile`  : AWS CLI profile to use (optional, default: `default`)
-- `-h, --help` : Show help message
-
-This will delete all `ecs-app1` to `ecs-app5` child stacks first, then the `ecs-parent` stack.
